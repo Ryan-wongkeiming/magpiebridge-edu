@@ -1,0 +1,386 @@
+// Prisma schema for MagpieBridge-Edu
+// Based on docs/DATABASE_SCHEMA.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and platform access
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String    @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String?
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Role relationships
+  userRoles       UserRole[]
+
+  // Content relationships
+  authoredCourses Course[]    @relation("AuthorCourses")
+  managedCourses  Course[]    @relation("ManagerCourses")
+
+  // Learning relationships
+  enrollments     Enrollment[]
+  lessonProgress  LessonProgress[]
+  quizAttempts    QuizAttempt[]
+  certificates    Certificate[] @relation("CertificateUser")
+  revokedCertificates Certificate[] @relation("RevokedCertificates")
+
+  // Management relationships
+  managerId       String?
+  manager         User?       @relation("UserManager", fields: [managerId], references: [id])
+  reports         User[]      @relation("UserManager")
+
+  // Audit
+  auditLogs       AuditLog[]  @relation("UserAuditLogs")
+
+  // Auth.js/NextAuth.js integration
+  accounts        Account[]
+  sessions        Session[]
+}
+
+// Role model for permission categories
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Role assignments
+  userRoles   UserRole[]
+}
+
+// Junction table for User-Role many-to-many relationship
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+  role      Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+// Auth.js/NextAuth.js account model
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// Auth.js/NextAuth.js session model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Auth.js/NextAuth.js verification token model
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// Course model for structured learning units
+model Course {
+  id              String     @id @default(cuid())
+  title           String
+  description     String?
+  status          String     @default("draft") // draft, published, archived
+  estimatedDuration Int?     // in minutes
+  completionCriteria Json?   // Requirements to complete the course
+  visibility      String     @default("private") // public, private, assigned
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  publishedAt     DateTime?
+  archivedAt      DateTime?
+
+  // Author and manager
+  authorId        String
+  author          User       @relation("AuthorCourses", fields: [authorId], references: [id])
+  managerId       String?
+  manager         User?      @relation("ManagerCourses", fields: [managerId], references: [id])
+
+  // Content relationships
+  modules         Module[]
+  quizzes         Quiz[]
+  learningPaths   LearningPathCourse[]
+
+  // Learning relationships
+  enrollments     Enrollment[]
+  certificates    Certificate[]
+
+  // Audit
+  auditLogs       AuditLog[] @relation("CourseAuditLogs")
+}
+
+// Module model for course sections
+model Module {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  sortOrder   Int
+  required    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+}
+
+// Lesson model for individual learning items
+model Lesson {
+  id              String   @id @default(cuid())
+  moduleId        String
+  title           String
+  content         String?  // Lesson content (Markdown, HTML, etc.)
+  contentType     String   @default("text") // text, video, document, etc.
+  contentUrl      String?  // URL for external content or file reference
+  sortOrder       Int
+  required        Boolean  @default(true)
+  estimatedDuration Int?   // in minutes
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  module          Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  lessonProgress  LessonProgress[]
+}
+
+// Enrollment model for learner-course relationships
+model Enrollment {
+  id              String   @id @default(cuid())
+  userId          String
+  courseId        String
+  enrollmentSource String  @default("assigned") // self, assigned, learning_path
+  status          String   @default("not_started") // not_started, in_progress, completed, withdrawn, archived
+  progressPercent Float   @default(0)
+  enrolledAt      DateTime @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  dueDate         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+  course          Course   @relation(fields: [courseId], references: [id])
+  lessonProgress  LessonProgress[]
+  quizAttempts    QuizAttempt[]
+  certificate     Certificate?
+
+  @@unique([userId, courseId])
+}
+
+// LessonProgress model for tracking learner progress
+model LessonProgress {
+  id            String   @id @default(cuid())
+  userId        String
+  enrollmentId  String
+  lessonId      String
+  status        String   @default("not_started") // not_started, in_progress, completed
+  startedAt     DateTime?
+  completedAt   DateTime?
+  lastViewedAt  DateTime?
+  // Watch tracking for video lessons. Seconds are the furthest point reached,
+  // which is what proves the learner actually watched rather than skipped.
+  watchedSeconds Int     @default(0)
+  durationSeconds Int?
+  // Set when a learner confirms watching a video that cannot play in-app.
+  acknowledgedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id])
+  enrollment    Enrollment @relation(fields: [enrollmentId], references: [id])
+  lesson        Lesson   @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId, enrollmentId])
+}
+
+// Quiz model for assessments
+model Quiz {
+  id              String   @id @default(cuid())
+  courseId        String
+  title           String
+  description     String?
+  passingScore    Float    @default(70) // Percentage required to pass
+  attemptLimit    Int?     // Null = unlimited
+  timeLimit       Int?     // In minutes, null = no time limit
+  requiredForCompletion Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions       Question[]
+  quizAttempts    QuizAttempt[]
+}
+
+// Question model for quiz questions
+model Question {
+  id              String   @id @default(cuid())
+  quizId          String
+  questionText    String
+  questionType    String   @default("multiple_choice") // multiple_choice, single_choice, true_false, short_answer
+  answerOptions   Json?    // Array of possible answers
+  correctAnswer   Json?    // Correct answer(s)
+  points          Float    @default(1)
+  sortOrder       Int
+  explanation     String?  // Explanation shown after answering
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  quiz            Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+// QuizAttempt model for learner quiz submissions
+model QuizAttempt {
+  id              String   @id @default(cuid())
+  quizId          String
+  userId          String
+  enrollmentId    String
+  submittedAnswers Json     // Answers submitted by the user
+  score           Float?   // Score as percentage
+  passed          Boolean? // Whether the attempt passed
+  startedAt       DateTime @default(now())
+  submittedAt     DateTime?
+  timeSpent       Int?     // Time spent in seconds
+  attemptNumber   Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  quiz            Quiz     @relation(fields: [quizId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+  enrollment      Enrollment @relation(fields: [enrollmentId], references: [id])
+}
+
+// Certificate model for completion proof
+model Certificate {
+  id                  String   @id @default(cuid())
+  userId              String
+  courseId            String
+  enrollmentId        String
+  certificateNumber   String   @unique
+  completionDate      DateTime
+  issuedDate          DateTime @default(now())
+  status              String   @default("active") // active, revoked
+  revokedAt           DateTime?
+  revokedByUserId     String?
+  revocationReason    String?
+  certificateData     Json?    // Template data, completion evidence, etc.
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user                User     @relation(fields: [userId], references: [id], name: "CertificateUser")
+  course              Course   @relation(fields: [courseId], references: [id])
+  enrollment          Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  @@unique([enrollmentId])
+  revokedByUser       User?    @relation("RevokedCertificates", fields: [revokedByUserId], references: [id])
+  
+
+  @@unique([userId, courseId])
+}
+
+
+
+// LearningPath model for grouped courses
+model LearningPath {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  status          String   @default("draft") // draft, published, archived
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  publishedAt     DateTime?
+  archivedAt      DateTime?
+
+  // Courses in this path
+  learningPathCourses LearningPathCourse[]
+
+  // Audit
+  auditLogs       AuditLog[] @relation("LearningPathAuditLogs")
+}
+
+// Junction table for LearningPath-Course many-to-many relationship
+model LearningPathCourse {
+  id            String   @id @default(cuid())
+  learningPathId String
+  courseId      String
+  sortOrder     Int
+  required      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  learningPath  LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  course        Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([learningPathId, courseId])
+}
+
+// AuditLog model for administrative activity tracking
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // Created, Updated, Deleted, Published, etc.
+  entityType  String   // User, Course, Module, etc.
+  entityId    String?  // ID of the entity that was affected
+  userId      String?
+  details     Json?    // Additional details about the action
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation("UserAuditLogs", fields: [userId], references: [id])
+  course      Course?  @relation("CourseAuditLogs", fields: [entityId], references: [id], map: "AuditLog_course_fkey")
+  learningPath LearningPath? @relation("LearningPathAuditLogs", fields: [entityId], references: [id], map: "AuditLog_learningPath_fkey")
+}
+
+// Platform settings, stored as key/value pairs so new settings need no
+// migration. Values are JSON so numbers, booleans, and strings all fit.
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  category    String   @default("general") // general, certificates, learning, notifications
+  label       String?
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

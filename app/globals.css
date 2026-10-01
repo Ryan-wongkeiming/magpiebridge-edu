@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* MagpieBridge brand palette — a deep teal primary with warm neutrals. */
+    --background: 0 0% 100%;
+    --foreground: 200 25% 12%;
+
+    --muted: 200 20% 96%;
+    --muted-foreground: 200 10% 42%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 25% 12%;
+
+    --border: 200 15% 88%;
+    --input: 200 15% 88%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 25% 12%;
+
+    /* Primary: deep teal (Coursera-style blue-teal, but our own). */
+    --primary: 190 80% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 200 20% 96%;
+    --secondary-foreground: 200 25% 12%;
+
+    --accent: 190 40% 94%;
+    --accent-foreground: 190 80% 25%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --ring: 190 80% 30%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 200 25% 8%;
+
+    --foreground: 200 20% 96%;
+
+    --muted: 200 15% 16%;
+    --muted-foreground: 200 10% 60%;
+
+    --popover: 200 25% 10%;
+    --popover-foreground: 200 20% 96%;
+
+    --border: 200 15% 20%;
+    --input: 200 15% 20%;
+
+    --card: 200 25% 10%;
+    --card-foreground: 200 20% 96%;
+
+    --primary: 190 70% 40%;
+    --primary-foreground: 200 25% 8%;
+
+    --secondary: 200 15% 16%;
+    --secondary-foreground: 200 20% 96%;
+
+    --accent: 200 15% 18%;
+    --accent-foreground: 190 70% 60%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --ring: 190 70% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
