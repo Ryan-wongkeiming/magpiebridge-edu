@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionUser, isAdmin } from '@/lib/api-auth'
+import { recordAudit } from '@/lib/audit'
 
 // PATCH /api/admin/certificates/[id] - Revoke a certificate
 export async function PATCH(
@@ -42,6 +43,20 @@ export async function PATCH(
         revokedAt: new Date(),
         revokedByUserId: session.id
       }
+    })
+
+    // Record the revocation in the audit trail so the action is visible
+    // on the admin Activity screen alongside user/course/settings changes.
+    await recordAudit({
+      action: 'Revoked',
+      entityType: 'Certificate',
+      entityId: certificate.id,
+      userId: session.id,
+      details: {
+        certificateNumber: certificate.certificateNumber,
+        userId: certificate.userId,
+        courseId: certificate.courseId,
+      },
     })
 
     return NextResponse.json({

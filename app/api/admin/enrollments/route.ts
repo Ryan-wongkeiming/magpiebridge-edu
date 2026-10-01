@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionUser, isAdmin } from '@/lib/api-auth'
+import { recordAudit } from '@/lib/audit'
 
 // POST /api/admin/enrollments - Assign a course to one or more learners
 export async function POST(request: Request) {
@@ -48,6 +49,22 @@ export async function POST(request: Request) {
         })),
       })
     }
+
+    // Record the assignment in the audit trail. The details capture which
+    // learners were assigned and which were skipped so the action is
+    // reconstructable from the Activity screen alone.
+    await recordAudit({
+      action: 'Assigned course',
+      entityType: 'Enrollment',
+      entityId: courseId,
+      userId: actor.id,
+      details: {
+        courseId,
+        courseTitle: course.title,
+        assignedUserIds: toCreate,
+        skippedUserIds: userIds.filter((id) => alreadyEnrolled.has(id)),
+      },
+    })
 
     return NextResponse.json({
       assigned: toCreate.length,

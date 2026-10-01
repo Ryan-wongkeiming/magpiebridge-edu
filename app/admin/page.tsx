@@ -51,6 +51,11 @@ const SECTIONS = [
     title: 'Activity',
     description: 'See a record of administrative actions.',
   },
+  {
+    href: '/admin/reporting',
+    title: 'Reporting',
+    description: 'Platform-wide completion rates, certificates over time, and active learners.',
+  },
 ]
 
 export default function AdminHomePage() {

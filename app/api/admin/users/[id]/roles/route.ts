@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionUser, isAdmin } from '@/lib/api-auth'
+import { recordAudit } from '@/lib/audit'
 
 // PUT /api/admin/users/[id]/roles - Replace a user's roles
 export async function PUT(
@@ -79,6 +80,22 @@ export async function PUT(
         where: { id: params.id },
         include: { userRoles: { include: { role: true } } },
       })
+    })
+
+    // Record the role change in the audit trail so the admin Activity screen
+    // shows who changed whose roles and to what.
+    const previousRoles = target.userRoles.map((ur) => ur.role.name)
+    const newRoles = updated?.userRoles.map((ur) => ur.role.name) ?? []
+    await recordAudit({
+      action: 'Updated roles',
+      entityType: 'User',
+      entityId: target.id,
+      userId: actor.id,
+      details: {
+        targetEmail: target.email,
+        previousRoles,
+        newRoles,
+      },
     })
 
     return NextResponse.json({

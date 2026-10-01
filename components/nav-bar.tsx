@@ -14,6 +14,9 @@ const learnerLinks = [
 
 const authorLinks = [{ href: '/courses', label: 'Authoring' }]
 const instructorLinks = [{ href: '/instructor/progress', label: 'Learner Progress' }]
+// Manager team view (BLK-004). The /manager/team route lists a manager's
+// direct reports with their progress and certificates.
+const managerLinks = [{ href: '/manager/team', label: 'Team' }]
 // A single entry point; the individual sections live on the admin hub page.
 const adminLinks = [{ href: '/admin', label: 'Admin' }]
 
@@ -22,16 +25,15 @@ export function NavBar() {
   const { data: session, status } = useSession()
   const roles = session?.user?.roles ?? []
 
-  const isAdmin = roles.includes('admin')
-  const isInstructor = roles.includes('instructor') || isAdmin
-  // Manager team view is not built yet (Phase 5 / BLK-004). Only show the
-  // Admin link for admins; managers see the standard learner nav until a
-  // /manager/team route exists.
+  const admin = roles.includes('admin')
+  const isInstructor = roles.includes('instructor') || admin
+  const manager = roles.includes('manager') || admin
   const links = [
     ...learnerLinks,
     ...(isInstructor ? authorLinks : []),
     ...(isInstructor ? instructorLinks : []),
-    ...(isAdmin ? adminLinks : []),
+    ...(manager ? managerLinks : []),
+    ...(admin ? adminLinks : []),
   ]
 
   // Keep the visible set small by dropping duplicate hrefs.

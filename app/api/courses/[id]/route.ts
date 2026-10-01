@@ -2,6 +2,7 @@ import { auth } from '@/auth'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSessionUser, isAdmin, canEditCourse } from '@/lib/api-auth'
+import { recordAudit } from '@/lib/audit'
 
 export async function GET(
   request: Request,
@@ -165,6 +166,15 @@ export async function PATCH(
         archivedAt: archiving ? new Date() : null,
         updatedAt: new Date()
       }
+    })
+
+    // Record the archive/restore in the audit trail.
+    await recordAudit({
+      action: archiving ? 'Archived' : 'Restored',
+      entityType: 'Course',
+      entityId: params.id,
+      userId: user.id,
+      details: { title: course.title, newStatus: updated.status },
     })
 
     return NextResponse.json({

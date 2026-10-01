@@ -36,7 +36,8 @@ export const authConfig = {
         path.startsWith('/instructor') ||
         path.startsWith('/courses') ||
         path.startsWith('/lessons') ||
-        path.startsWith('/quizzes')
+        path.startsWith('/quizzes') ||
+        path.startsWith('/manager')
       ) {
         return isLoggedIn
       }

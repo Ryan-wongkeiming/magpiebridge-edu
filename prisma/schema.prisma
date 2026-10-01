@@ -153,8 +153,10 @@ model Course {
   enrollments     Enrollment[]
   certificates    Certificate[]
 
-  // Audit
-  auditLogs       AuditLog[] @relation("CourseAuditLogs")
+  // Audit logs that reference this course are recorded via the polymorphic
+  // AuditLog.entityId column (see the AuditLog model note); there is no
+  // dedicated relation here because a single AuditLog row can reference
+  // several entity types.
 }
 
 // Module model for course sections
@@ -345,9 +347,6 @@ model LearningPath {
 
   // Courses in this path
   learningPathCourses LearningPathCourse[]
-
-  // Audit
-  auditLogs       AuditLog[] @relation("LearningPathAuditLogs")
 }
 
 // Junction table for LearningPath-Course many-to-many relationship
@@ -370,8 +369,14 @@ model LearningPathCourse {
 model AuditLog {
   id          String   @id @default(cuid())
   action      String   // Created, Updated, Deleted, Published, etc.
-  entityType  String   // User, Course, Module, etc.
-  entityId    String?  // ID of the entity that was affected
+  entityType  String   // User, Course, Certificate, Enrollment, etc.
+  // Polymorphic id of the affected entity. There is intentionally no foreign
+  // key on this column: an audit entry can reference a Course, a User, a
+  // Certificate, or an Enrollment, and a single column cannot be a FK to all
+  // of them. The previous `course`/`learningPath` relations forced entityId
+  // to match a Course/LearningPath id and silently dropped every other audit
+  // row on a FK violation.
+  entityId    String?
   userId      String?
   details     Json?    // Additional details about the action
   ipAddress   String?
@@ -379,8 +384,6 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   user        User?    @relation("UserAuditLogs", fields: [userId], references: [id])
-  course      Course?  @relation("CourseAuditLogs", fields: [entityId], references: [id], map: "AuditLog_course_fkey")
-  learningPath LearningPath? @relation("LearningPathAuditLogs", fields: [entityId], references: [id], map: "AuditLog_learningPath_fkey")
 }
 
 // Platform settings, stored as key/value pairs so new settings need no
