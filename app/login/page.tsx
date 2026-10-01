@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,24 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  // Support email fetched from the public settings endpoint. When an admin
+  // configures `platform.supportEmail`, the "Contact your administrator"
+  // link becomes a real mailto: instead of a dead `href="#"` anchor.
+  const [supportEmail, setSupportEmail] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+
+  useEffect(() => {
+    fetch('/api/settings/public')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.supportEmail) setSupportEmail(data.supportEmail)
+      })
+      .catch(() => {
+        // Settings are a convenience; never block login on them.
+      })
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,9 +131,16 @@ function LoginForm() {
 
         <p className="mt-10 text-center text-sm text-gray-500">
           Don't have an account?{' '}
-          <a href="#" className="font-semibold leading-6 text-indigo-600 hover:text-indigo-500">
-            Contact your administrator
-          </a>
+          {supportEmail ? (
+            <a
+              href={`mailto:${supportEmail}`}
+              className="font-semibold leading-6 text-indigo-600 hover:text-indigo-500"
+            >
+              Contact your administrator
+            </a>
+          ) : (
+            <span className="text-gray-400">Contact your administrator</span>
+          )}
         </p>
       </div>
     </div>

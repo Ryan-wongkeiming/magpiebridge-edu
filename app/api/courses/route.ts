@@ -16,20 +16,43 @@ export async function GET(request: Request) {
     const courses = await prisma.course.findMany({
       where: status ? { status } : undefined,
       include: {
+        author: {
+          select: { id: true, name: true, email: true },
+        },
         modules: {
           orderBy: { sortOrder: 'asc' },
-          include: {
+          select: {
+            id: true,
             lessons: {
               orderBy: { sortOrder: 'asc' },
-              select: { id: true, title: true, contentType: true }
-            }
-          }
-        }
+              select: { id: true, title: true, contentType: true, estimatedDuration: true },
+            },
+          },
+        },
       },
-      orderBy: { updatedAt: 'desc' }
+      orderBy: { updatedAt: 'desc' },
     })
 
-    return NextResponse.json(courses)
+    // Shape the catalog payload so cards can render real metadata instead of
+    // falling back to placeholders. lessonCount and durationMinutes are
+    // derived from the modules/lessons relation; thumbnailUrl and level come
+    // from the new Course fields; instructorName is the author's name.
+    const shaped = courses.map((course) => {
+      const allLessons = course.modules.flatMap((m) => m.lessons)
+      const lessonCount = allLessons.length
+      const durationMinutes =
+        course.estimatedDuration ??
+        allLessons.reduce((sum, l) => sum + (l.estimatedDuration ?? 0), 0)
+
+      return {
+        ...course,
+        lessonCount,
+        durationMinutes: durationMinutes > 0 ? durationMinutes : null,
+        instructorName: course.author?.name ?? null,
+      }
+    })
+
+    return NextResponse.json(shaped)
   } catch (error) {
     console.error('Get courses error:', error)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })

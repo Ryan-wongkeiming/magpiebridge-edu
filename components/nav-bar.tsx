@@ -24,13 +24,13 @@ export function NavBar() {
 
   const isAdmin = roles.includes('admin')
   const isInstructor = roles.includes('instructor') || isAdmin
-  const isManager = roles.includes('manager') || isAdmin
-
+  // Manager team view is not built yet (Phase 5 / BLK-004). Only show the
+  // Admin link for admins; managers see the standard learner nav until a
+  // /manager/team route exists.
   const links = [
     ...learnerLinks,
     ...(isInstructor ? authorLinks : []),
     ...(isInstructor ? instructorLinks : []),
-    ...(isManager && !isAdmin ? [{ href: '/my-progress', label: 'Team' }] : []),
     ...(isAdmin ? adminLinks : []),
   ]
 

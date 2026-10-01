@@ -127,6 +127,12 @@ model Course {
   estimatedDuration Int?     // in minutes
   completionCriteria Json?   // Requirements to complete the course
   visibility      String     @default("private") // public, private, assigned
+  // Catalog presentation fields. thumbnailUrl points at an uploaded or
+  // external image; level is a free-text label (Beginner/Intermediate/Advanced)
+  // shown on the catalog card. Both are optional so existing courses keep
+  // working without a backfill.
+  thumbnailUrl    String?
+  level           String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   publishedAt     DateTime?

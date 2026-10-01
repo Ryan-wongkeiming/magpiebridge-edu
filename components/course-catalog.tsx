@@ -14,6 +14,7 @@ export default function CourseCatalog({ courses, onEnroll }: CourseCatalogProps)
   const [error, setError] = useState('')
 
   const handleEnroll = async (courseId: string) => {
+    setError('')
     try {
       setEnrolling(courseId)
       await onEnroll(courseId)
@@ -36,14 +37,6 @@ export default function CourseCatalog({ courses, onEnroll }: CourseCatalogProps)
             Discover courses designed to build your skills and advance your career.
             Learn at your own pace with expert-led content.
           </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <Button variant="outline" size="sm">
-              All Categories
-            </Button>
-            <Button variant="outline" size="sm">
-              Newest First
-            </Button>
-          </div>
         </div>
       </section>
 
@@ -98,7 +91,7 @@ export default function CourseCatalog({ courses, onEnroll }: CourseCatalogProps)
                         <svg className="w-3 h-3 mr-1 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3" />
                         </svg>
-                        {course.lessonCount} Lessons
+                        {course.lessonCount ?? 0} Lessons
                       </span>
                       <span>
                         <svg className="w-3 h-3 mr-1 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +135,6 @@ export default function CourseCatalog({ courses, onEnroll }: CourseCatalogProps)
             {courses.length === 0 && (
               <div className="col-span-full text-center py-12">
                 <p className="text-gray-500 mb-4">No courses available for enrollment</p>
-                <Button variant="outline">Browse Categories</Button>
               </div>
             )}
           </div>
