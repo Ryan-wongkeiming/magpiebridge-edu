@@ -1,27 +1,28 @@
-import { auth } from '@/auth'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getSessionUser } from '@/lib/api-auth'
+import { calculateQuizScore, validateQuizSubmission } from '@/lib/quiz-utils'
 import { autoIssueCertificate } from '@/lib/certificate-utils'
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
-    
-    if (!session?.user) {
+    const actor = await getSessionUser()
+
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
+
     const { quizId, enrollmentId, submittedAnswers, timeSpent } = await request.json()
-    
+
     // Verify enrollment belongs to user
     const enrollment = await prisma.enrollment.findUnique({
       where: { id: enrollmentId }
     })
-    
-    if (!enrollment || enrollment.userId !== session.user.id) {
+
+    if (!enrollment || enrollment.userId !== actor.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    
+
     // Verify quiz exists and user is enrolled in the course
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
@@ -33,153 +34,99 @@ export async function POST(request: Request) {
         }
       }
     })
-    
+
     if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 })
     }
-    
+
     // Check if enrollment is for the correct course
     if (enrollment.courseId !== quiz.courseId) {
       return NextResponse.json({ error: 'Invalid enrollment for this quiz' }, { status: 400 })
     }
-    
-    // Check attempt limit
-    if (quiz.attemptLimit) {
-      const attemptCount = await prisma.quizAttempt.count({
-        where: {
-          quizId: quizId,
-          enrollmentId: enrollmentId
+
+    // Reject submissions that are not valid before scoring. An empty or
+    // incomplete submission otherwise counts as a failed attempt against the
+    // learner's attempt limit. validateQuizSubmission is the single source
+    // of truth for what a complete submission looks like.
+    if (!Array.isArray(submittedAnswers) || !validateQuizSubmission(quiz, submittedAnswers)) {
+      return NextResponse.json(
+        { error: 'All questions must be answered before submitting' },
+        { status: 400 }
+      )
+    }
+
+    // Create the attempt and enforce the limit in a single transaction so
+    // two concurrent submissions cannot both pass the limit check and both
+    // create an over-limit attempt. The attempt number is derived from the
+    // count inside the same transaction, which is the value that will be
+    // committed.
+    const quizAttempt = await prisma.$transaction(async (tx) => {
+      if (quiz.attemptLimit) {
+        const attemptCount = await tx.quizAttempt.count({
+          where: { quizId, enrollmentId }
+        })
+
+        if (attemptCount >= quiz.attemptLimit) {
+          throw new ResponseLimitError('Attempt limit reached')
+        }
+      }
+
+      const nextAttemptCount = await tx.quizAttempt.count({
+        where: { quizId, enrollmentId }
+      })
+
+      // Scoring lives in lib/quiz-utils.ts so there is one implementation of
+      // what "correct" means for each question type.
+      const score = calculateQuizScore(quiz, submittedAnswers)
+      const passed = score >= quiz.passingScore
+
+      return tx.quizAttempt.create({
+        data: {
+          quiz: { connect: { id: quizId } },
+          user: { connect: { id: actor.id } },
+          enrollment: { connect: { id: enrollmentId } },
+          submittedAnswers,
+          score,
+          passed,
+          timeSpent,
+          attemptNumber: nextAttemptCount + 1,
+          submittedAt: new Date()
         }
       })
-      
-      if (attemptCount >= quiz.attemptLimit) {
-        return NextResponse.json({ error: 'Attempt limit reached' }, { status: 400 })
-      }
-    }
-    
-    // Calculate score by comparing submitted answers with correct answers
-    let totalPoints = 0
-    let earnedPoints = 0
-    
-    for (const question of quiz.questions) {
-      totalPoints += question.points
-      
-      const submittedAnswer = submittedAnswers.find((a: any) => a.questionId === question.id)
-      
-      if (submittedAnswer) {
-        // Compare answers based on question type
-        let isCorrect = false
-        
-        switch (question.questionType) {
-          case 'multiple_choice':
-            // For multiple choice, check if all correct answers are selected
-            const correctAnswers = Array.isArray(question.correctAnswer) ? question.correctAnswer : [question.correctAnswer]
-            const submittedAnswersArray = Array.isArray(submittedAnswer.answer) ? submittedAnswer.answer : [submittedAnswer.answer]
-            isCorrect = correctAnswers.every((answer: any) => submittedAnswersArray.includes(answer)) &&
-                         submittedAnswersArray.every((answer: any) => correctAnswers.includes(answer))
-            break
-            
-          case 'single_choice':
-          case 'true_false':
-            // For single choice and true/false, check if answer matches
-            isCorrect = submittedAnswer.answer === question.correctAnswer
-            break
-            
-          case 'short_answer':
-            // For short answer, check if answer matches (case insensitive)
-            isCorrect = submittedAnswer.answer.toLowerCase() === (question.correctAnswer as string).toLowerCase()
-            break
-        }
-        
-        if (isCorrect) {
-          earnedPoints += question.points
-        }
-      }
-    }
-    
-    const score = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0
-    const passed = score >= quiz.passingScore
-    
-    // Get attempt number
-    const attemptCount = await prisma.quizAttempt.count({
-      where: {
-        quizId: quizId,
-        enrollmentId: enrollmentId
-      }
     })
-    
-    // Create quiz attempt
-    const quizAttempt = await prisma.quizAttempt.create({
-      data: {
-        quiz: {
-          connect: {
-            id: quizId
-          }
-        },
-        user: {
-          connect: {
-            id: session.user.id
-          }
-        },
-        enrollment: {
-          connect: {
-            id: enrollmentId
-          }
-        },
-        submittedAnswers: submittedAnswers,
-        score: score,
-        passed: passed,
-        timeSpent: timeSpent,
-        attemptNumber: attemptCount + 1,
-        submittedAt: new Date()
-      }
-    })
-    
-    // If the quiz was passed, check if the course is now completed and auto-issue certificate
-    if (passed) {
+
+    // If the quiz was passed, check if the course is now completed and
+    // auto-issue a certificate. Reuses the shared completion check, which
+    // respects Lesson.required and Quiz.requiredForCompletion.
+    if (quizAttempt.passed) {
       try {
-        // Check if all lessons are completed
-        const course = await prisma.course.findUnique({
-          where: { id: quiz.courseId },
-          include: {
-            modules: {
-              include: {
-                lessons: true
-              }
-            }
-          }
-        })
-        
-        if (course) {
-          const totalLessons = course.modules.reduce((total, module) => total + module.lessons.length, 0)
-          
-          if (totalLessons > 0) {
-            const completedLessons = await prisma.lessonProgress.count({
-              where: {
-                enrollmentId: enrollmentId,
-                status: 'completed'
-              }
-            })
-            
-            // If all lessons are completed, auto-issue certificate
-            if (completedLessons === totalLessons) {
-              await autoIssueCertificate(enrollmentId)
-            }
-          }
-        }
+        await autoIssueCertificate(enrollmentId)
       } catch (error) {
-        console.error('Error checking course completion for certificate:', error)
-        // Don't fail the request if certificate issuance fails
+        console.error('Error auto-issuing certificate after quiz:', error)
+        // Don't fail the request if certificate issuance fails; the attempt
+        // itself succeeded. The enrollment will be re-checked next time.
       }
     }
-    
+
     return NextResponse.json({
       ...quizAttempt,
-      score: score,
-      passed: passed
+      score: quizAttempt.score,
+      passed: quizAttempt.passed
     })
   } catch (error) {
+    if (error instanceof ResponseLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     console.error('Submit quiz attempt error:', error)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  }
+}
+
+// Small sentinel used to bubble the attempt-limit condition out of the
+// transaction without conflating it with a Prisma error.
+class ResponseLimitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ResponseLimitError'
   }
 }

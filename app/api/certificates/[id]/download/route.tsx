@@ -1,18 +1,18 @@
-import { auth } from '@/auth'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getSessionUser, isAdmin, canEditCourse } from '@/lib/api-auth'
 import { pdf } from '@react-pdf/renderer'
 import CertificateDocument from '@/lib/pdf-generator'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await auth()
-    
-    if (!session?.user) {
+    const actor = await getSessionUser()
+
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
-    // Get certificate by ID
+
+    // Get certificate with the owning course so canEditCourse can decide.
     const certificate = await prisma.certificate.findUnique({
       where: { id: params.id },
       include: {
@@ -20,16 +20,18 @@ export async function GET(request: Request, { params }: { params: { id: string }
         user: true
       }
     })
-    
+
     if (!certificate) {
       return NextResponse.json({ error: 'Certificate not found' }, { status: 404 })
     }
-    
-    // Check if user has permission to view certificate
-    const canView = certificate.userId === session.user.id || 
-                   session.user.roles?.includes('admin') ||
-                   session.user.roles?.includes('instructor')
-    
+
+    // The learner themselves, an admin, or the author/manager of the course
+    // the certificate was earned for. A blanket instructor check would let
+    // any instructor download any learner's certificate, even for courses
+    // they do not teach.
+    const canView =
+      certificate.userId === actor.id || isAdmin(actor) || await canEditCourse(actor, certificate.courseId)
+
     if (!canView) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

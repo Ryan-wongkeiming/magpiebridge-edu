@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { generateSecureToken } from '@/lib/prisma'
+import { getSetting } from '@/lib/settings'
 import { Certificate } from '@prisma/client'
 
 /**
@@ -8,7 +10,10 @@ import { Certificate } from '@prisma/client'
  */
 export async function checkCompletionRequirements(enrollmentId: string): Promise<boolean> {
   try {
-    // Get the enrollment with related data
+    // Get the enrollment with related data. `required` and
+    // `requiredForCompletion` are both default-true, so loading them here
+    // lets the checks below distinguish required from optional content
+    // without a second query.
     const enrollment = await prisma.enrollment.findUnique({
       where: { id: enrollmentId },
       include: {
@@ -16,7 +21,9 @@ export async function checkCompletionRequirements(enrollmentId: string): Promise
           include: {
             modules: {
               include: {
-                lessons: true
+                lessons: {
+                  select: { id: true, required: true }
+                }
               }
             }
           }
@@ -26,9 +33,7 @@ export async function checkCompletionRequirements(enrollmentId: string): Promise
           where: {
             submittedAt: { not: null }
           },
-          include: {
-            quiz: true
-          }
+          select: { quizId: true, passed: true }
         }
       }
     })
@@ -37,38 +42,47 @@ export async function checkCompletionRequirements(enrollmentId: string): Promise
       throw new Error('Enrollment not found')
     }
 
-    // Check if all lessons are completed
-    const totalLessons = enrollment.course.modules.reduce(
-      (count, module) => count + module.lessons.length,
-      0
+    // Count only required lessons. A non-required lesson the learner skipped
+    // must not block completion; `Lesson.required` defaults to true, so this
+    // only changes behavior for lessons an author explicitly marked optional.
+    const requiredLessons = enrollment.course.modules.flatMap((m) => m.lessons).filter((l) => l.required)
+
+    const completedRequiredLessonIds = new Set(
+      enrollment.lessonProgress
+        .filter((lp) => lp.status === 'completed')
+        .map((lp) => lp.lessonId)
     )
 
-    const completedLessons = enrollment.lessonProgress.filter(
-      (lp) => lp.status === 'completed'
+    const requiredLessonsCompleted = requiredLessons.filter((l) =>
+      completedRequiredLessonIds.has(l.id)
     ).length
 
-    if (completedLessons < totalLessons) {
+    if (requiredLessonsCompleted < requiredLessons.length) {
       return false
     }
 
-    // Check if all required quizzes are passed
-    // For simplicity, we're assuming all quizzes associated with the course need to be passed
-    // This could be enhanced to check specific quiz requirements
+    // Check that every quiz marked requiredForCompletion has been passed at
+    // least once. Quizzes the author marked optional are not a blocker.
     const courseQuizzes = await prisma.quiz.findMany({
       where: {
-        courseId: enrollment.courseId
-      }
+        courseId: enrollment.courseId,
+        requiredForCompletion: true,
+      },
+      select: { id: true }
     })
 
-    const passedQuizzes = enrollment.quizAttempts.filter(
-      (qa) => qa.passed === true
-    ).length
+    const requiredQuizIds = new Set(courseQuizzes.map((q) => q.id))
+    const passedRequiredQuizIds = new Set(
+      enrollment.quizAttempts
+        .filter((qa) => qa.passed === true)
+        .map((qa) => qa.quizId)
+    )
 
-    if (passedQuizzes < courseQuizzes.length) {
-      return false
-    }
+    const allRequiredQuizzesPassed = Array.from(requiredQuizIds).every((qid) =>
+      passedRequiredQuizIds.has(qid)
+    )
 
-    return true
+    return allRequiredQuizzesPassed
   } catch (error) {
     console.error('Error checking completion requirements:', error)
     throw error
@@ -120,11 +134,20 @@ export async function issueCertificate(enrollmentId: string): Promise<Certificat
       return existingCertificate
     }
 
-    // Generate certificate number
-    const certificateNumber = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+    // Generate a certificate number using a cryptographically random suffix.
+    // Math.random() can collide and is not a secure source; generateSecureToken
+    // uses crypto.randomBytes, the same source as password reset tokens.
+    const certificateNumber = `CERT-${Date.now()}-${generateSecureToken(4).toUpperCase()}`
 
-    // Get institution name from environment or use default
-    const institutionName = process.env.INSTITUTION_NAME || 'MagpieBridge Education Platform'
+    // Institution name comes from the admin-configurable platform.name
+    // setting, falling back to the INSTITUTION_NAME env var for legacy
+    // deployments, then to a sensible default. This keeps a single source of
+    // truth for the platform name across the UI and certificates.
+    const platformSetting = await getSetting('platform.name')
+    const institutionName =
+      (typeof platformSetting === 'string' && platformSetting.trim()) ||
+      process.env.INSTITUTION_NAME ||
+      'MagpieBridge Education Platform'
 
     // Create certificate record with enhanced data
     const certificate = await prisma.certificate.create({

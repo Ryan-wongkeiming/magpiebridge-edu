@@ -60,6 +60,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
+        // A suspended admin cannot regain a session by signing in. The
+        // status field is toggled by an admin and must be respected here
+        // rather than only at the page level, otherwise the suspended user
+        // keeps full data access through the API.
+        if (user.status !== 'active') {
+          return null
+        }
+
         const isValid = await bcrypt.compare(
           credentials.password as string,
           user.password

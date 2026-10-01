@@ -42,14 +42,24 @@ export async function GET() {
       const requiredLessons = allLessons.filter((l) => l.required)
       const requiredCompleted = requiredLessons.filter((l) => completedIds.has(l.id)).length
 
-      const bestAttempt = e.quizAttempts.reduce<null | { score: number | null; passed: boolean | null }>(
-        (best, a) => {
-          if (a.passed) return { score: a.score, passed: true }
-          if (!best) return { score: a.score, passed: a.passed }
+      // Best attempt: a passing attempt always wins; otherwise the highest
+      // score across all attempts. The previous logic returned the first
+      // attempt's score when no attempt had passed, which under-reported.
+      const bestAttempt = e.quizAttempts.reduce<
+        null | { score: number | null; passed: boolean | null }
+      >((best, a) => {
+        if (a.passed) {
+          // A pass is the best outcome; keep the first pass seen.
+          if (!best || !best.passed) return { score: a.score, passed: true }
           return best
-        },
-        null
-      )
+        }
+        if (!best) return { score: a.score, passed: a.passed }
+        if (best.passed) return best
+        // Both best and a are failing: keep the higher score.
+        return (a.score ?? 0) > (best.score ?? 0)
+          ? { score: a.score, passed: a.passed }
+          : best
+      }, null)
 
       return {
         enrollmentId: e.id,

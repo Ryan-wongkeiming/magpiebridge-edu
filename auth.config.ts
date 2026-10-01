@@ -24,7 +24,26 @@ export const authConfig = {
         return isLoggedIn
       }
 
-      if (path.startsWith('/dashboard')) {
+      // Other authenticated areas. Cover every learner/instructor/manager
+      // surface so a signed-out visitor does not get a flash of the page
+      // shell before the client redirect. Public pages (/, /login, /catalog
+      // view, /validate-certificate, /reset-password, /forgot-password)
+      // remain open.
+      if (
+        path.startsWith('/dashboard') ||
+        path.startsWith('/enrollments') ||
+        path.startsWith('/my-progress') ||
+        path.startsWith('/instructor') ||
+        path.startsWith('/courses') ||
+        path.startsWith('/lessons') ||
+        path.startsWith('/quizzes')
+      ) {
+        return isLoggedIn
+      }
+
+      // /catalog is reachable by signed-in users; an anonymous visitor is
+      // redirected to sign in by the page itself.
+      if (path === '/catalog' || path.startsWith('/catalog/')) {
         return isLoggedIn
       }
 

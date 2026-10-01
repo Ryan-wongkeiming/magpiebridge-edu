@@ -42,9 +42,12 @@ export async function POST(request: Request) {
       }
     })
     
-    // Delete used token
-    await prisma.verificationToken.delete({
-      where: { token }
+    // Invalidate all pending reset tokens for this user, not just the one
+    // used. A reset proves the account owner had control at this moment, so
+    // any other unused tokens for the same email are stale and must not be
+    // accepted later.
+    await prisma.verificationToken.deleteMany({
+      where: { identifier: verificationToken.identifier }
     })
     
     return NextResponse.json({ message: 'Password reset successful' })
