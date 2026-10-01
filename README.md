@@ -113,18 +113,18 @@ PowerShell's `Remove-Item -Recurse -Force` silently skips reparse points, so it 
 
 ### Backups
 
-There is currently **no version control** (no git repository), so OneDrive's own file history is the only backup. That is thin protection for source code. Adding git alongside OneDrive would give proper history without giving up the OneDrive sync.
-
+This project lives in a OneDrive-synced folder, which gives OneDrive's file history as a backup. A **git repository** is now initialized alongside OneDrive (`.gitignore` covers `node_modules/`, `.next/`, `.env*`, build artifacts), so commits give proper version history without giving up the OneDrive sync.
 ## Known limitations
 
 - **No file upload.** There is no upload endpoint and no storage integration. Lesson media is attached by pasting an external URL. The `Lesson` model already has `contentType` and `contentUrl` fields ready for real uploads.
 - **External video is not private.** An unlisted YouTube video can be watched by anyone with the link and is hosted on Google's servers. Use external video for public or non-sensitive material only; confidential content needs the storage work in Phase 2.
 - **Watch tracking depends on the browser.** It uses the YouTube IFrame API, so it works for YouTube videos played in-app. A learner who disables JavaScript, or who uses a blocked video's confirmation box, is not measured — that limitation is inherent to embedding someone else's player.
-- **No automated tests.** Every change so far has been verified by hand.
-- Manager and admin platform-wide progress views are not built (Phase 3).
+- **Automated tests are minimal.** Vitest is wired with 31 passing tests, but most are unit-level placeholders; real component and route coverage is a follow-up (see `outputs/ACTION_PLAN_2026-10-01.md` Phase 4).
+- Manager and admin platform-wide progress views are not built (Phase 3 of the action plan).
 - Learning paths have database tables but no implementation.
-- Audit logging has a table but no implementation.
+- Audit logging has a writer and an admin page, but coverage is partial (user, course, settings changes only; certificate revoke, enrollment assignment, and role changes are not yet audited).
 - `lib/email.ts` does not send real mail; password reset tokens are written to the database only.
 - The identity provider is still open (Entra, Google, or email-first); the credentials provider is the only one wired.
 - The visual design is functional but generic; there has been no design pass.
-- Two parallel certificate component sets exist (`components/certificate-*.tsx` and `components/certificates/*.tsx`); both compile, and consolidating them is a follow-up job.
+- Certificate components live in one canonical location (`components/certificates/*`); the earlier duplicate set under `components/certificate-*.tsx` was consolidated on 2026-09-30.
+- Several known correctness defects remain open and are tracked in `outputs/ACTION_PLAN_2026-10-01.md`: suspended users can still sign in (B4), optional lessons/quizzes block completion (B9/B10), the certificate list page has no view/download wiring (B21), and the course catalog shows fields the API does not return (B23). These are the target of Phase 2 and Phase 3 of the action plan.

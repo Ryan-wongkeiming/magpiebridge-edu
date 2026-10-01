@@ -53,6 +53,8 @@ Executed Phase 1 tasks from `outputs/BUILD_PLAN_2026-09-30.md`:
 
 ## Verification
 
+> **Correction (2026-10-01):** The claims below were made on 2026-09-30. A re-check on 2026-10-01 found that `npm run typecheck` actually **failed** at that time, because a JSX-containing test file (`lib/certificate-card.test.ts`) had been placed with a `.ts` extension and was not caught before the report was written. This is exactly the "tracker/docs state drift" risk called out in `outputs/BUILD_PLAN_2026-09-30.md` §2.3. The typecheck gate, the lint gate (ESLint 9 + Next.js 14 `next lint` incompatibility), and the test suite were restored to green on 2026-10-01 — see `outputs/BASELINE_RESTORE_2026-10-01.md` for the verified gate results and the work done.
+
 After changes, ran the full build gate:
 - `npm run typecheck` → Passed (0 errors)
 - `npm run build` → Passed (compiled successfully, despite expected dynamic server usage warnings for API routes)
