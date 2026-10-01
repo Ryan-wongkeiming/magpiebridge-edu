@@ -1,4 +1,44 @@
-| 2026-09-30 | Grok | Set up automated testing infrastructure with Vitest. Added vitest.config.ts, test/setup.ts, updated package.json with test dependencies and scripts, created example.test.ts and lib/utils.test.ts to verify the setup works. | `vitest.config.ts`, `test/setup.ts`, `package.json`, `example.test.ts`, `lib/utils.test.ts` | Established foundation for automated testing to reduce risk before real users. Addresses NEXT-024 (automated tests). |
+# MagpieBridge-Edu — Living Work Tracker
+
+> Updated after every agent job per AGENTS.md rule 5. Latest state first.
+
+## NOW
+
+- Baseline is green and verified (2026-10-01). All four gates pass: `typecheck` (0 errors), `test` (31/31), `lint` (exit 0, warnings only), `build` (exit 0). Git initialized with `.gitignore`.
+- Next unit of work: **Phase 2 — Security and data-integrity fixes** (`outputs/ACTION_PLAN_2026-10-01.md` Part 2). Named output: `outputs/SECURITY_INTEGRITY_FIX_2026-10-01.md`.
+
+## DONE
+
+- **2026-10-01 — Phase 1: Baseline restore** (see `outputs/BASELINE_RESTORE_2026-10-01.md`). Fixed B1/B2 (JSX-in-`.ts` test broke typecheck), B3 (no git), B27/B28 (docs drift). Also fixed the `next lint` "Invalid Options" failure by downgrading ESLint to v8, registered jest-dom matchers, and converted the certificate detail page to the canonical dynamic-route signature. Initial git commit + Phase 1 commit landed.
+- **2026-10-01 — Full-review action plan** (see `outputs/ACTION_PLAN_2026-10-01.md`). Catalogued 28 confirmed bugs (B1–B28) and a 6-phase enhancement plan after scrutinizing schema, auth, all API routes, key components, lib, tests, and config.
+- **2026-10-01 — Certificate download button** (see LOG row). Added `onDownload` handler to the certificate detail page.
+- **2026-09-30 — Build plan + execution** (see `outputs/BUILD_PLAN_2026-09-30.md` and `outputs/BUILD_PLAN_EXECUTION_REPORT_2026-09-30.md`). Certificate component consolidation, catalog image fix, lint activation. (Note: the execution report's "typecheck passes" claim was corrected on 2026-10-01 — see B28.)
+- **2026-09-23 — Phase 1 MVP complete** (see `outputs/PHASE1_REPORT_2026-09-23.md`). Course archiving, module/lesson reordering, course assignment, user and role management, instructor and learner progress views, course preview, role-aware navigation. External video embedding added same day.
+
+## NEXT
+
+1. **Phase 2 — Security and data-integrity fixes** (highest priority; 3 correctness defects in a system that already issues certificates):
+   - B4: `auth.ts` `authorize()` ignores `user.status` — suspended users can still sign in.
+   - B9/B10: `checkCompletionRequirements` ignores `Lesson.required` and `Quiz.requiredForCompletion` — optional content blocks certificate issuance.
+   - B5: certificate download route uses a blanket `instructor` role check instead of `canEditCourse` — any instructor can download any learner's certificate.
+   - Also: B6 (reset tokens not fully invalidated), B7 (middleware gaps), B8 (duplicate loosely-typed auth helpers), B11/B13 (quiz scoring/validation duplication), B12 (attempt-count race), B14 (best-attempt logic), B17 (`Math.random` cert number), B18/B19 (missing `onDelete: Cascade`).
+2. **Phase 3 — Fix the broken learner flows**: B21 (cert list has no view/download wiring), B22 (dead `certificate-page.tsx`), B23/B24 (catalog references missing fields), B25/B26 (dead links), B15/B16 (silent cert-issuance failure; env-var institution name).
+3. **Phase 4 — Regression protection**: replace placeholder tests with real component + route tests; browser-verify the certificate and catalog flows.
+4. **Phase 5 — Enhancements**: file upload/storage (BLK-003), transactional email (BLK-005), manager team view (BLK-004), reporting dashboard, audit coverage, learning paths, identity provider (BLK-002).
+5. **Phase 6 — Production readiness**: rate limiting, CSRF/cookie review, env validation, backup verification.
+
+## BLOCKED
+
+- **BLK-002 — Identity provider.** Open (Entra, Google, or email-first). Credentials provider is the only one wired. Phase 5.
+- **BLK-003 — File upload / media storage.** No upload endpoint or storage integration. Lesson media is external URLs only. Phase 5.
+- **BLK-004 — Manager team view.** DB self-relation (`User.managerId`) exists; no UI. Phase 5.
+- **BLK-005 — Transactional email.** `lib/email.ts` only logs; password reset tokens are written to the DB only. Phase 5.
+
+---
+
+## LOG
+
+
 | 2026-09-30 | Grok | Enhanced course catalog with hero banner and rich course cards (NEXT-029). Added thumbnail support, duration badges, metadata display, improved hover states, and responsive grid layout. | `components/course-catalog.tsx` | Finished the design pass started on 2026-09-23. Course catalog now features a hero banner and richer course cards with thumbnail, duration, author, and level information. |
 | 2026-09-30 | Grok | Consolidated duplicate certificate components (NEXT-015). Removed duplicate certificate components from `components/certificate-card.tsx`, `components/certificate-detail.tsx`, `components/certificate-list.tsx`, and `components/certificate-page.tsx`, keeping only the versions in `components/certificates/`. Updated all imports to use the consolidated components. | `components/certificate-card.tsx`, `components/certificate-detail.tsx`, `components/certificate-list.tsx`, `components/certificate-page.tsx`, `components/certificates/certificate-card.tsx`, `components/certificates/certificate-details.tsx`, `components/certificates/certificate-list.tsx`, `components/certificates/certificate-page.tsx` | Eliminated duplicate certificate components to reduce code complexity and maintenance burden. All certificate-related components now reside in the `components/certificates/` directory. |
 | 2026-09-30 | Grok | Produced a systematic build plan after deep diagnostics, including verified failures, phased stabilization work, regression-protection tasks, enhancement sequencing, and definition of done. | `outputs/BUILD_PLAN_2026-09-30.md` | Plan is execution-ready and prioritized to restore green build gates before further feature expansion. |
