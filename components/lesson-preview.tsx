@@ -66,6 +66,24 @@ export default function LessonPreview({
     )
   }
 
+  if (lesson.contentType === 'image' && lesson.contentUrl) {
+    return (
+      <div className="bg-gray-100 rounded-lg p-8 text-center">
+        <div className="text-4xl mb-4">🖼️</div>
+        <h3 className="text-lg font-medium mb-2">Image</h3>
+        <p className="text-gray-600 mb-4">This lesson contains an image.</p>
+        <img 
+          src={lesson.contentUrl} 
+          alt={lesson.title}
+          className="max-w-full h-auto rounded-lg mb-4"
+        />
+        <p className="text-xs text-muted-foreground">
+          {lesson.contentUrl.split('/').pop()}
+        </p>
+      </div>
+    )
+  }
+
   if (lesson.contentType === 'external' && lesson.contentUrl) {
     return (
       <div className="bg-gray-100 rounded-lg p-8 text-center">

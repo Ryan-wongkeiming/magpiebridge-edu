@@ -26,6 +26,25 @@ interface VideoInfo {
   }
 }
 
+// Allowed upload types, mirrored from the server-side allow-list in
+// app/api/upload/route.ts. Keep the two in sync.
+const ALLOWED_UPLOAD_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'text/xml',
+]
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
 export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorProps) {
   const [title, setTitle] = useState(lesson.title)
   const [contentType, setContentType] = useState(lesson.contentType || 'text')
@@ -39,7 +58,11 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null)
   const [checking, setChecking] = useState(false)
 
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
   const isVideo = contentType === 'video'
+  const isUploadable = contentType === 'document' || contentType === 'image'
 
   // Debounced lookup so the instructor sees the result while typing or pasting.
   useEffect(() => {
@@ -69,6 +92,64 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
 
     return () => clearTimeout(timer)
   }, [contentUrl, isVideo])
+
+  const handleUpload = async (file: File) => {
+    setUploading(true)
+    setUploadError('')
+
+    try {
+      // Step 1: ask the server for a presigned PUT URL.
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type,
+          fileSize: file.size,
+        }),
+      })
+
+      const uploadData = await uploadResponse.json()
+      if (!uploadResponse.ok) {
+        throw new Error(uploadData.error || 'Failed to get upload URL')
+      }
+
+      // Step 2: PUT the file directly to storage using the presigned URL.
+      const putResponse = await fetch(uploadData.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+
+      if (!putResponse.ok) {
+        throw new Error('Failed to upload file to storage')
+      }
+
+      // Step 3: store the returned content URL on the lesson.
+      setContentUrl(uploadData.contentUrl)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+      setUploadError(`File type ${file.type} is not allowed`)
+      return
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError('File size exceeds the 10MB limit')
+      return
+    }
+
+    handleUpload(file)
+  }
 
   const handleSave = async () => {
     if (isVideo && videoInfo && !videoInfo.canEmbed && !videoInfo.watchUrl) {
@@ -166,6 +247,7 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
             <option value="text">Text</option>
             <option value="video">Video</option>
             <option value="document">Document</option>
+            <option value="image">Image</option>
             <option value="external">External Resource</option>
           </select>
         </div>
@@ -186,14 +268,16 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
           </div>
         )}
 
-        {(contentType === 'video' || contentType === 'document' || contentType === 'external') && (
+        {(contentType === 'video' || contentType === 'document' || contentType === 'image' || contentType === 'external') && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {contentType === 'video'
                 ? 'Video URL'
                 : contentType === 'document'
                   ? 'Document URL'
-                  : 'Resource URL'}
+                  : contentType === 'image'
+                    ? 'Image URL'
+                    : 'Resource URL'}
             </label>
             <input
               type="text"
@@ -210,8 +294,10 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
               {contentType === 'video'
                 ? 'Paste a YouTube or Vimeo link exactly as it appears in your browser. It will be converted for playback automatically.'
                 : contentType === 'document'
-                  ? 'Enter a Google Drive, Dropbox, or other document URL'
-                  : 'Enter the external resource URL'}
+                  ? 'Enter a Google Drive, Dropbox, or other document URL, or upload a file below.'
+                  : contentType === 'image'
+                    ? 'Enter an image URL, or upload a file below.'
+                    : 'Enter the external resource URL'}
             </p>
 
             {isVideo && checking && (
@@ -254,6 +340,30 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
               <div className="mt-4">
                 <p className="mb-2 text-sm font-medium text-gray-700">Preview</p>
                 <VideoPlayer url={contentUrl} title={title} />
+              </div>
+            )}
+
+            {isUploadable && (
+              <div className="mt-4 rounded-md border border-gray-200 p-4">
+                <p className="mb-2 text-sm font-medium text-gray-700">Or upload a file</p>
+                <input
+                  type="file"
+                  accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.csv,.xml"
+                  onChange={handleFileChange}
+                  disabled={uploading}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                />
+                {uploading && (
+                  <p className="mt-2 text-sm text-gray-500">Uploading…</p>
+                )}
+                {uploadError && (
+                  <p className="mt-2 text-sm text-red-600">{uploadError}</p>
+                )}
+                {contentUrl && !uploading && (
+                  <p className="mt-2 text-sm text-gray-500">
+                    Currently using: {contentUrl.split('/').pop()}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -304,7 +414,7 @@ export default function LessonEditor({ lesson, onSave, onCancel }: LessonEditorP
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={saving || checking}>
+        <Button onClick={handleSave} disabled={saving || checking || uploading}>
           {saving ? 'Saving...' : 'Save Lesson'}
         </Button>
       </div>
