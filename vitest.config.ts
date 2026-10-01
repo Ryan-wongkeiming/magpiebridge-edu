@@ -74,4 +74,11 @@ export default defineConfig({
       '@': resolve(__dirname, './'),
     },
   },
+  // Use the automatic JSX runtime so components that use JSX without an
+  // explicit `import React from 'react'` (the Next.js 14 default) render
+  // correctly under Vitest's esbuild transform.
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+  },
 });
