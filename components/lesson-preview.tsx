@@ -15,6 +15,20 @@ interface LessonPreviewProps {
   initialWatchedSeconds?: number
 }
 
+/**
+ * Convert a stored contentUrl into a route that serves the file through a
+ * presigned GET URL. The storage bucket is private, so the raw contentUrl is
+ * not directly readable. Uploaded files live under `uploads/...`; external
+ * URLs (YouTube, Google Drive, etc.) are left untouched.
+ */
+function fileAccessUrl(contentUrl: string): string {
+  if (contentUrl.includes('/uploads/')) {
+    const key = contentUrl.split('/uploads/')[1]
+    return `/api/files/${encodeURIComponent(key)}`
+  }
+  return contentUrl
+}
+
 export default function LessonPreview({
   lesson,
   onProgress,
@@ -55,7 +69,7 @@ export default function LessonPreview({
         <h3 className="text-lg font-medium mb-2">Document</h3>
         <p className="text-gray-600 mb-4">This lesson contains a document.</p>
         <a 
-          href={lesson.contentUrl} 
+          href={fileAccessUrl(lesson.contentUrl)} 
           target="_blank" 
           rel="noopener noreferrer"
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
@@ -73,7 +87,7 @@ export default function LessonPreview({
         <h3 className="text-lg font-medium mb-2">Image</h3>
         <p className="text-gray-600 mb-4">This lesson contains an image.</p>
         <img 
-          src={lesson.contentUrl} 
+          src={fileAccessUrl(lesson.contentUrl)} 
           alt={lesson.title}
           className="max-w-full h-auto rounded-lg mb-4"
         />
