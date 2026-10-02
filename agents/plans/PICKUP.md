@@ -8,7 +8,8 @@
 - **Production data is seeded and migrated.** Roles, 4 users, and the sample course seeded; 6 real courses copied from local via `scripts/migrate-courses.cjs`. Production now has 7 courses, 8 modules, 68 lessons, 1 quiz. Login works with the seeded accounts (`password123`).
 - **Phase 5B / BLK-003 (file upload) is fully working.** Presigned-URL upload for images/documents, auth-gated `POST /api/upload`, restored lesson editor with video embed preserved, and fixed `lib/storage.ts`. **Cloudflare R2 storage is configured** (local `.env` + Vercel env vars). Added `GET /api/files/[key]` to serve uploaded files from the private bucket via a presigned GET URL, and updated `lesson-preview` to route uploads through it. Verified end-to-end in local and production: presigned PUT (200), file stored in R2, `/api/files/[key]` redirects (307) to a presigned GET URL that serves the file (200). All four gates green.
 - **Transactional email is working.** Gmail SMTP configured (local `.env` + Vercel env vars). Password-reset flow verified end-to-end: request returns 200, reset token created in DB, email sent via Gmail SMTP (no errors in log). Note: Gmail free SMTP allows ~500 emails/day — fine for a pilot.
-- **Next job: learning paths** (rest of Phase 5B), then identity provider (BLK-002). Each needs its own report and tracker row.
+- **Google sign-in (BLK-002) is in progress.** Added the Google provider to `auth.ts` (`Google({ allowDangerousEmailAccountLinking: true })`) and a "Sign in with Google" button to the login page. Typecheck passes. **Blocked on Google OAuth credentials** — need `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` from the Google Cloud Console (OAuth client ID with redirect URIs `https://magpiebridge-edu.vercel.app/api/auth/callback/google` and `http://localhost:3000/api/auth/callback/google`). Once provided, set them in `.env` + Vercel, test the flow, and redeploy.
+- **Next job: finish Google sign-in (BLK-002)**, then learning paths (rest of Phase 5B). Each needs its own report and tracker row.
 
 ## DONE
 
@@ -26,18 +27,19 @@
 
 ## NEXT
 
-1. **Learning paths** (rest of Phase 5B). `LearningPath` and `LearningPathCourse` tables exist with no implementation. Build a minimal authoring + learner view. One job, own report.
-2. **Identity provider (BLK-002)**. Wire one OAuth provider (Microsoft Entra ID or Google) via Auth.js, keeping credentials as fallback. After learning paths.
+1. **Finish Google sign-in (BLK-002)**. Code is in place (Google provider + login button); needs `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` from the Google Cloud Console, then set in `.env` + Vercel, test, redeploy.
+2. **Learning paths** (rest of Phase 5B). `LearningPath` and `LearningPathCourse` tables exist with no implementation. Build a minimal authoring + learner view. One job, own report.
 3. **Phase 6 — Production readiness**: rate limiting, CSRF/cookie review, env validation, backup verification.
 
 ## BLOCKED
 
-- **BLK-002 — Identity provider.** Still open (Entra, Google, or email-first). Credentials provider is the only one wired. After learning paths.
+- **Google sign-in (BLK-002)** — blocked on Google OAuth credentials. Need `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` from the Google Cloud Console (OAuth client ID with redirect URIs `https://magpiebridge-edu.vercel.app/api/auth/callback/google` and `http://localhost:3000/api/auth/callback/google`).
 
 ---
 
 ## LOG
 
+| 2026-10-02 | Grok | Started Google sign-in (BLK-002). Added the Google provider to `auth.ts` (`Google({ allowDangerousEmailAccountLinking: true })`) and a "Sign in with Google" button to the login page. Typecheck passes. **Blocked on Google OAuth credentials** — need `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` from the Google Cloud Console. | `auth.ts`, `app/login/page.tsx` | Next: get Google OAuth credentials, set in `.env` + Vercel, test, redeploy. |
 | 2026-10-02 | Grok | Configured transactional email via Gmail SMTP. Set SMTP_* env vars (local `.env` + Vercel all environments). Password-reset flow verified end-to-end: request returns 200, reset token created in DB, email sent via Gmail SMTP (no errors in log). Gmail free SMTP allows ~500 emails/day. | `.env`, Vercel env vars | Password-reset email now delivers. |
 | 2026-10-02 | Grok | Completed file upload (BLK-003) end-to-end. Configured Cloudflare R2 storage (local `.env` + Vercel env vars). Added `GET /api/files/[key]` to serve uploaded files from the private bucket via a presigned GET URL, and updated `lesson-preview` to route uploads through it. Verified in local and production: presigned PUT (200), file stored in R2, `/api/files/[key]` redirects (307) to a presigned GET URL that serves the file (200). All four gates green. | `app/api/files/[key]/route.ts`, `components/lesson-preview.tsx`, `.env`, Vercel env vars | File uploads now work in production. |
 | 2026-10-02 | Grok | Migrated local course data to production. Seeded the Neon DB (roles, 4 users, sample course), then ran `scripts/migrate-courses.cjs` to copy the 6 real courses (modules, lessons, quizzes, questions) from local to production, mapping users by email and skipping duplicates. Production now has 7 courses, 8 modules, 68 lessons, 1 quiz. Verified via production API and direct DB query. | `scripts/migrate-courses.cjs`, `.gitignore` | Production DB now mirrors local course content. |
