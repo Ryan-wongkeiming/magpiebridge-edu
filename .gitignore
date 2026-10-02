@@ -41,3 +41,12 @@ Thumbs.db
 
 # OneDrive reparse-point artifacts (never commit these)
 .next/cache/
+
+# Vercel CLI local state
+.vercel
+.env*
+
+# Agent tooling artifacts (Neon integration, etc.)
+.agents/
+.claude/
+skills-lock.json
