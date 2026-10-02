@@ -8,8 +8,8 @@ import type { CertificateLike } from '@/lib/certificate-data'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRouter } from 'next/navigation'
 
-export default function CertificatePage({ params }: { params: { certificateId: string } }) {
-  const certificateId = params.certificateId
+export default function CertificatePage({ params }: { params: { id: string } }) {
+  const certificateId = params.id
   const [certificate, setCertificate] = useState<CertificateLike | null>(null)
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
