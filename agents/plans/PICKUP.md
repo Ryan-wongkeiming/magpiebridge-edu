@@ -7,6 +7,7 @@
 - **Deployed to Vercel (production), publicly accessible.** Live at https://magpiebridge-edu.vercel.app. Neon Postgres database provisioned and connected; all 6 Prisma migrations applied. Auth env vars set (`NEXTAUTH_SECRET`, `AUTH_SECRET`, `NEXTAUTH_URL`). Added `postinstall: prisma generate` to fix the Vercel build. **Deployment Protection is OFF** — the site is publicly reachable (homepage, login, and `/api/settings/public` all return 200 without a Vercel auth wall).
 - **Production data is seeded and migrated.** Roles, 4 users, and the sample course seeded; 6 real courses copied from local via `scripts/migrate-courses.cjs`. Production now has 7 courses, 8 modules, 68 lessons, 1 quiz. Login works with the seeded accounts (`password123`).
 - **Phase 5B / BLK-003 (file upload) is fully working.** Presigned-URL upload for images/documents, auth-gated `POST /api/upload`, restored lesson editor with video embed preserved, and fixed `lib/storage.ts`. **Cloudflare R2 storage is configured** (local `.env` + Vercel env vars). Added `GET /api/files/[key]` to serve uploaded files from the private bucket via a presigned GET URL, and updated `lesson-preview` to route uploads through it. Verified end-to-end in local and production: presigned PUT (200), file stored in R2, `/api/files/[key]` redirects (307) to a presigned GET URL that serves the file (200). All four gates green.
+- **Transactional email is working.** Gmail SMTP configured (local `.env` + Vercel env vars). Password-reset flow verified end-to-end: request returns 200, reset token created in DB, email sent via Gmail SMTP (no errors in log). Note: Gmail free SMTP allows ~500 emails/day — fine for a pilot.
 - **Next job: learning paths** (rest of Phase 5B), then identity provider (BLK-002). Each needs its own report and tracker row.
 
 ## DONE
@@ -31,13 +32,13 @@
 
 ## BLOCKED
 
-- **Transactional email delivery** — password-reset email won't actually send until SMTP credentials are configured in Vercel (Resend or similar).
 - **BLK-002 — Identity provider.** Still open (Entra, Google, or email-first). Credentials provider is the only one wired. After learning paths.
 
 ---
 
 ## LOG
 
+| 2026-10-02 | Grok | Configured transactional email via Gmail SMTP. Set SMTP_* env vars (local `.env` + Vercel all environments). Password-reset flow verified end-to-end: request returns 200, reset token created in DB, email sent via Gmail SMTP (no errors in log). Gmail free SMTP allows ~500 emails/day. | `.env`, Vercel env vars | Password-reset email now delivers. |
 | 2026-10-02 | Grok | Completed file upload (BLK-003) end-to-end. Configured Cloudflare R2 storage (local `.env` + Vercel env vars). Added `GET /api/files/[key]` to serve uploaded files from the private bucket via a presigned GET URL, and updated `lesson-preview` to route uploads through it. Verified in local and production: presigned PUT (200), file stored in R2, `/api/files/[key]` redirects (307) to a presigned GET URL that serves the file (200). All four gates green. | `app/api/files/[key]/route.ts`, `components/lesson-preview.tsx`, `.env`, Vercel env vars | File uploads now work in production. |
 | 2026-10-02 | Grok | Migrated local course data to production. Seeded the Neon DB (roles, 4 users, sample course), then ran `scripts/migrate-courses.cjs` to copy the 6 real courses (modules, lessons, quizzes, questions) from local to production, mapping users by email and skipping duplicates. Production now has 7 courses, 8 modules, 68 lessons, 1 quiz. Verified via production API and direct DB query. | `scripts/migrate-courses.cjs`, `.gitignore` | Production DB now mirrors local course content. |
 | 2026-10-02 | Grok | Deployed to Vercel production. Provisioned Neon Postgres (neon-chestnut-feather), connected to the project, set auth env vars (`NEXTAUTH_SECRET`, `AUTH_SECRET`, `NEXTAUTH_URL`), applied all 6 Prisma migrations, added `postinstall: prisma generate` to fix the Vercel build (PrismaClientInitializationError), and deployed. Live at https://magpiebridge-edu.vercel.app. Verified homepage, login page, and `/api/settings/public` (returns DB data). Deployment Protection is on. | `package.json`, `.vercel/`, Vercel env vars | Next: disable/configure Deployment Protection before client sharing; then learning paths. |
